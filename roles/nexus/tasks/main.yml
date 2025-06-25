@@ -1,0 +1,39 @@
+- name: Install dependencies
+  apt:
+    name: screen
+    state: present
+    update_cache: yes
+
+- name: Try downloading nexus_s3.sh from GitHub
+  block:
+    - name: Download nexus_s3.sh
+      get_url:
+        url: https://raw.githubusercontent.com/kooroot/Node_Executor-Nexus/refs/heads/main/nexus_s3.sh
+        dest: /root/nexus_s3.sh
+        mode: "0755"
+        timeout: 10
+      register: download_result
+  rescue:
+    - name: Download failed. Falling back to local copy.
+      debug:
+        msg: "GitHub download failed, using local files/nexus_s3.sh instead."
+
+    - name: Copy local nexus_s3.sh file
+      copy:
+        src: nexus_s3.sh
+        dest: /root/nexus_s3.sh
+        mode: "0755"
+
+- name: Run Nexus script with NodeID (expect automated input)
+  expect:
+    command: /root/nexus_s3.sh
+    responses:
+      "Do you agree to the Nexus Beta Terms.*": "Y"
+      "Enter your choice.*": "1"
+      "Enter your NodeID.*": "{{ node_id }}"
+    timeout: 300
+  register: nexus_output
+
+- name: Debug output
+  debug:
+    var: nexus_output.stdout_lines

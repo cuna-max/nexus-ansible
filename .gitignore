@@ -1,0 +1,20 @@
+# 민감한 정보가 포함된 파일들
+group_vars/miners.yml
+inventory.ini
+.env
+*.key
+*.pem
+
+# Ansible 관련
+*.retry
+ansible.log
+
+# 시스템 파일
+.DS_Store
+Thumbs.db
+
+# IDE 파일
+.vscode/
+.idea/
+*.swp
+*.swo 
