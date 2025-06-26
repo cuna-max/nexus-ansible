@@ -11,15 +11,14 @@
     mode: "0755"
 
 - name: Run Nexus script with automated setup
-  expect:
-    command: /root/nexus_multi.sh
-    responses:
-      "Select option:": "1"
-      "How many nodes do you want to run.*": "1"
-      "Threads per node.*": "{{ threads }}"
-      "NodeID 1:": "{{ node_id }}"
-      "Continue anyway.*": "y"
-    timeout: 300
+  shell: |
+    export AUTO_MODE=1
+    export NODE_COUNT=1
+    export THREADS_PER_NODE={{ threads }}
+    export NODE_ID={{ node_id }}
+    /root/nexus_multi.sh
+  args:
+    executable: /bin/bash
   register: nexus_output
 
 - name: Debug output

@@ -18,9 +18,16 @@ BASE_DIR="$HOME/nexus_nodes"
 CONFIG_FILE="$BASE_DIR/config.txt"
 mkdir -p "$BASE_DIR"
 
-# System info
-TOTAL_CORES=$(sysctl -n hw.ncpu)
-TOTAL_MEMORY=$(( $(sysctl -n hw.memsize) / 1024 / 1024 / 1024 ))
+# System info - Linux compatible
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    # macOS
+    TOTAL_CORES=$(sysctl -n hw.ncpu)
+    TOTAL_MEMORY=$(( $(sysctl -n hw.memsize) / 1024 / 1024 / 1024 ))
+else
+    # Linux
+    TOTAL_CORES=$(nproc)
+    TOTAL_MEMORY=$(free -g | awk '/^Mem:/{print $2}')
+fi
 
 # Find nexus-network binary
 find_nexus_binary() {
@@ -108,8 +115,14 @@ check_resources() {
     if [[ $total_threads -gt $TOTAL_CORES ]]; then
         echo -e "\n${YELLOW}⚠ Warning: Total threads ($total_threads) exceeds CPU cores ($TOTAL_CORES)${NC}"
         echo -e "${YELLOW}This may cause performance issues.${NC}"
-        read -p "Continue anyway? (y/n): " confirm
-        [[ "$confirm" != "y" ]] && return 1
+        
+        # In automated mode, continue automatically
+        if [[ -n "$AUTO_MODE" ]]; then
+            echo -e "${YELLOW}Continuing automatically in automated mode...${NC}"
+        else
+            read -p "Continue anyway? (y/n): " confirm
+            [[ "$confirm" != "y" ]] && return 1
+        fi
     else
         echo -e "\n${GREEN}✓ Resource allocation looks good${NC}"
         echo -e "  Free cores for system: $((TOTAL_CORES - total_threads))"
@@ -362,6 +375,37 @@ monitor_nodes() {
 
 # Main
 find_nexus_binary
+
+# Check for automated mode
+if [[ -n "$AUTO_MODE" ]]; then
+    echo -e "${BLUE}Running in automated mode...${NC}"
+    
+    # Use environment variables or defaults
+    NODE_COUNT=${NODE_COUNT:-1}
+    THREADS_PER_NODE=${THREADS_PER_NODE:-1}
+    NODE_ID=${NODE_ID:-"default"}
+    
+    echo -e "${CYAN}Configuration:${NC}"
+    echo "  Nodes: $NODE_COUNT"
+    echo "  Threads per node: $THREADS_PER_NODE"
+    echo "  NodeID: $NODE_ID"
+    
+    # Check resources
+    if check_resources "$NODE_COUNT" "$THREADS_PER_NODE"; then
+        # Create array of NodeIDs
+        NODEIDS=()
+        for i in $(seq 1 $NODE_COUNT); do
+            NODEIDS+=("$NODE_ID")
+        done
+        
+        setup_nodes "$NODE_COUNT" "$THREADS_PER_NODE" "${NODEIDS[@]}"
+        echo -e "${GREEN}Automated setup completed!${NC}"
+        exit 0
+    else
+        echo -e "${RED}Resource check failed!${NC}"
+        exit 1
+    fi
+fi
 
 while true; do
     show_menu
