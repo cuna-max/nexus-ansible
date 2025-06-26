@@ -4,19 +4,27 @@
 # 기본 설정
 INVENTORY = inventory.ini
 GROUP = miners
+NEXUS_SCRIPT = /root/nexus_multi.sh
+ERROR_MSG = Nexus script not found
 
 # 기본 타겟
 .PHONY: help
 help:
 	@echo "사용 가능한 명령어:"
 	@echo "  make ping          - 서버 연결 상태 확인"
-	@echo "  make deploy        - Nexus 배포 실행"
-	@echo "  make status        - 서버 상태 확인"
-	@echo "  make logs          - Nexus 로그 확인"
-	@echo "  make restart       - Nexus 재시작"
+	@echo "  make deploy        - Nexus 새로 배포 (스크립트 복사 + 실행)"
+	@echo "  make status        - Nexus 노드 상태 확인"
+	@echo "  make restart       - Nexus 노드 재시작 (기존 설정으로)"
+	@echo "  make monitor       - 실시간 노드 모니터링"
 	@echo "  make update        - Nexus 업데이트"
 	@echo "  make check         - 시스템 상태 체크"
 	@echo "  make cleanup       - 정리 작업"
+	@echo ""
+	@echo "특정 서버 명령어 (SERVER=서버명 지정 필요):"
+	@echo "  make ping-single    - 특정 서버 연결 확인"
+	@echo "  make deploy-single  - 특정 서버에 새로 배포"
+	@echo "  make status-single  - 특정 서버 노드 상태 확인"
+	@echo "  make restart-single - 특정 서버 노드 재시작"
 
 # 서버 연결 상태 확인
 .PHONY: ping
@@ -30,29 +38,23 @@ deploy:
 	@echo "🚀 Nexus를 배포합니다..."
 	ansible-playbook -i $(INVENTORY) nexus.yml
 
-# 서버 상태 확인
+# Nexus 노드 상태 확인
 .PHONY: status
 status:
-	@echo "📊 서버 상태를 확인합니다..."
-	ansible $(GROUP) -i $(INVENTORY) -m shell -a "systemctl status nexus || echo 'Nexus 서비스가 없습니다'"
+	@echo "📊 Nexus 노드 상태를 확인합니다..."
+	ansible $(GROUP) -i $(INVENTORY) -m shell -a "bash $(NEXUS_SCRIPT) status || echo '$(ERROR_MSG)'"
 
-# Nexus 로그 확인
-.PHONY: logs
-logs:
-	@echo "📋 Nexus 로그를 확인합니다..."
-	ansible $(GROUP) -i $(INVENTORY) -m shell -a "journalctl -u nexus -n 50 --no-pager || echo 'Nexus 로그가 없습니다'"
-
-# Nexus 재시작
+# Nexus 노드 재시작
 .PHONY: restart
 restart:
-	@echo "🔄 Nexus를 재시작합니다..."
-	ansible $(GROUP) -i $(INVENTORY) -m shell -a "systemctl restart nexus || echo 'Nexus 서비스를 찾을 수 없습니다'"
+	@echo "🔄 Nexus 노드를 재시작합니다..."
+	ansible $(GROUP) -i $(INVENTORY) -m shell -a "bash $(NEXUS_SCRIPT) restart || echo '$(ERROR_MSG)'"
 
-# Nexus 업데이트
-.PHONY: update
-update:
-	@echo "⬆️  Nexus를 업데이트합니다..."
-	ansible $(GROUP) -i $(INVENTORY) -m shell -a "cd /root && wget -O nexus_s3.sh https://raw.githubusercontent.com/kooroot/Node_Executor-Nexus/refs/heads/main/nexus_s3.sh && chmod +x nexus_s3.sh"
+# 실시간 노드 모니터링
+.PHONY: monitor
+monitor:
+	@echo "📈 실시간 Nexus 노드 모니터링을 시작합니다..."
+	ansible $(GROUP) -i $(INVENTORY) -m shell -a "bash $(NEXUS_SCRIPT) monitor || echo '$(ERROR_MSG)'"
 
 # 시스템 상태 체크
 .PHONY: check
@@ -76,4 +78,16 @@ ping-single:
 .PHONY: deploy-single
 deploy-single:
 	@echo "🚀 $(SERVER) 서버에 Nexus를 배포합니다..."
-	ansible-playbook -i $(INVENTORY) nexus.yml --limit $(SERVER) 
+	ansible-playbook -i $(INVENTORY) nexus.yml --limit $(SERVER)
+
+# 특정 서버의 Nexus 노드 상태 확인
+.PHONY: status-single
+status-single:
+	@echo "📊 $(SERVER) 서버의 Nexus 노드 상태를 확인합니다..."
+	ansible $(SERVER) -i $(INVENTORY) -m shell -a "bash $(NEXUS_SCRIPT) status || echo '$(ERROR_MSG)'"
+
+# 특정 서버의 Nexus 노드 재시작
+.PHONY: restart-single
+restart-single:
+	@echo "🔄 $(SERVER) 서버의 Nexus 노드를 재시작합니다..."
+	ansible $(SERVER) -i $(INVENTORY) -m shell -a "bash $(NEXUS_SCRIPT) restart || echo '$(ERROR_MSG)'"

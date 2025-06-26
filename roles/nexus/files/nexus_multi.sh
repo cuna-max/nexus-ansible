@@ -354,6 +354,7 @@ show_menu() {
     echo -e "${CYAN}4) Stop all nodes${NC}"
     echo -e "${CYAN}5) Check status${NC}"
     echo -e "${CYAN}6) Monitor nodes${NC}"
+    echo -e "${CYAN}7) Restart all nodes${NC}"
     echo -e "${CYAN}0) Exit${NC}"
 }
 
@@ -373,8 +374,60 @@ monitor_nodes() {
     done
 }
 
+# Restart all nodes
+restart_nodes() {
+    echo -e "\n${BLUE}Restarting all nodes...${NC}"
+    
+    # Load saved config
+    if ! load_config; then
+        echo -e "${RED}No saved configuration found!${NC}"
+        echo -e "${YELLOW}Please run setup first.${NC}"
+        return 1
+    fi
+    
+    echo -e "${CYAN}Configuration loaded:${NC}"
+    echo "  Total nodes: $NODE_COUNT"
+    echo "  Threads per node: $THREADS_PER_NODE"
+    echo "  NodeIDs: ${NODEIDS[@]}"
+    
+    # Stop existing nodes
+    echo -e "\n${YELLOW}Stopping existing nodes...${NC}"
+    pkill -f nexus-network 2>/dev/null
+    screen -wipe 2>/dev/null
+    sleep 2
+    
+    # Start nodes with saved configuration
+    echo -e "\n${GREEN}Starting nodes with saved configuration...${NC}"
+    setup_nodes "$NODE_COUNT" "$THREADS_PER_NODE" "${NODEIDS[@]}"
+    
+    echo -e "\n${GREEN}✓ All nodes restarted successfully!${NC}"
+}
+
 # Main
 find_nexus_binary
+
+# Check for command line arguments
+if [[ $# -gt 0 ]]; then
+    case "$1" in
+        "status")
+            check_status
+            exit 0
+            ;;
+        "restart")
+            restart_nodes
+            exit 0
+            ;;
+        "monitor")
+            monitor_nodes
+            exit 0
+            ;;
+        *)
+            echo -e "${RED}Unknown command: $1${NC}"
+            echo -e "${CYAN}Available commands: status, restart, monitor${NC}"
+            exit 1
+            ;;
+    esac
+fi
 
 # Check for automated mode
 if [[ -n "$AUTO_MODE" ]]; then
@@ -430,6 +483,7 @@ while true; do
             ;;
         5) check_status ;;
         6) monitor_nodes ;;
+        7) restart_nodes ;;
         0)
             echo -e "${GREEN}Goodbye!${NC}"
             exit 0
