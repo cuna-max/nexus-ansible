@@ -7,6 +7,7 @@
 - **자동 배포**: Nexus 마이닝 노드를 원격 서버에 자동으로 설치 및 설정
 - **일괄 관리**: 여러 서버를 동시에 관리할 수 있는 중앙화된 관리 시스템
 - **간편한 명령어**: Makefile을 통한 직관적인 명령어 제공
+- **실시간 모니터링**: 노드 상태 실시간 확인 및 모니터링
 - **안전한 설정**: 환경 변수를 통한 민감한 정보 보호
 
 ## 📋 요구사항
@@ -64,8 +65,9 @@ cp inventory.ini.example inventory.ini
 **group_vars/miners.yml** 파일을 편집하여 서버 접속 정보를 설정합니다:
 
 ```yaml
+# 서버 접속 정보 설정
 ansible_user: root
-ansible_ssh_pass: "{{ lookup('env', 'ANSIBLE_SSH_PASS') }}"
+ansible_ssh_pass: <password> # 실제 서버 비밀번호 입력
 ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 ```
 
@@ -75,12 +77,17 @@ ansible_ssh_common_args: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev
 
 ```ini
 [miners]
-# 형식: 서버명 ansible_host=IP주소 node_id=노드ID
-contabo1 ansible_host=192.168.1.100 node_id=7006171
-contabo2 ansible_host=192.168.1.101 node_id=7096264
+# 형식: 서버명 ansible_host=IP주소 node_id=노드ID threads=채굴스레드수
+server1 ansible_host=192.168.1.100 node_id=7006171 threads=1
+server2 ansible_host=192.168.1.101 node_id=7096264 threads=1
 ```
 
-## 🔧 사용법
+**설정 변수 설명:**
+
+- `node_id`: Nexus 마이닝 노드 ID
+- `threads`: 각 노드에서 사용할 CPU 스레드 수
+
+## �� 사용법
 
 ### Makefile 명령어 (권장)
 
@@ -91,26 +98,29 @@ make help
 # 서버 연결 상태 확인
 make ping
 
-# Nexus 배포
+# Nexus 배포 (스크립트 복사 + 실행)
 make deploy
 
-# 특정 서버에만 배포
-make deploy-single SERVER=contabo1
-
-# 서버 상태 확인
+# Nexus 노드 상태 확인
 make status
 
-# Nexus 로그 확인
-make logs
-
-# Nexus 재시작
+# Nexus 노드 재시작 (기존 설정으로)
 make restart
+
+# 실시간 노드 모니터링
+make monitor
 
 # 시스템 상태 체크
 make check
 
 # 정리 작업
 make cleanup
+
+# 특정 서버에만 실행 (예: make ping-single SERVER=server1)
+make ping-single SERVER=server1
+make deploy-single SERVER=server1
+make status-single SERVER=server1
+make restart-single SERVER=server1
 ```
 
 ### 직접 Ansible 명령어 사용
@@ -120,10 +130,13 @@ make cleanup
 ansible-playbook -i inventory.ini nexus.yml
 
 # 특정 서버에만 배포
-ansible-playbook -i inventory.ini nexus.yml --limit contabo1
+ansible-playbook -i inventory.ini nexus.yml --limit server1
 
 # 서버 연결 테스트
 ansible miners -i inventory.ini -m ping
+
+# 서버 상태 확인
+ansible miners -i inventory.ini -m shell -a "bash /root/nexus_multi.sh status"
 ```
 
 ## 📁 프로젝트 구조
@@ -142,7 +155,8 @@ nexus-ansible/
 │       ├── tasks/
 │       │   └── main.yml    # 설치 작업 정의
 │       └── files/
-│           └── nexus_s3.sh # Nexus 설치 스크립트 (백업용)
+│           ├── nexus_multi.sh # Nexus 다중 노드 설치 스크립트
+│           └── nexus_s3.sh    # Nexus S3 설치 스크립트 (백업용)
 ├── .gitignore              # Git 제외 파일 목록
 └── README.md
 ```
@@ -153,7 +167,6 @@ nexus-ansible/
 
 - `group_vars/miners.yml` - 서버 접속 비밀번호
 - `inventory.ini` - 서버 IP 주소 및 노드 ID
-- `.env` - 환경 변수 (비밀번호 등)
 
 이 파일들은 `.gitignore`에 포함되어 있어 실수로 커밋되는 것을 방지합니다.
 
@@ -163,14 +176,38 @@ nexus-ansible/
 
 ```ini
 [miners]
-my-server ansible_host=203.0.113.10 node_id=1234567
+my-server ansible_host=203.0.113.10 node_id=1234567 threads=1
 ```
 
 ### 다중 서버 설정
 
 ```ini
 [miners]
-server1 ansible_host=203.0.113.10 node_id=1234567
-server2 ansible_host=203.0.113.11 node_id=1234568
-server3 ansible_host=203.0.113.12 node_id=1234569
+server1 ansible_host=203.0.113.10 node_id=1234567 threads=1
+server2 ansible_host=203.0.113.11 node_id=1234568 threads=2
+server3 ansible_host=203.0.113.12 node_id=1234569 threads=4
 ```
+
+## 🔧 작업 흐름
+
+### 1. 배포 과정
+
+1. **의존성 설치**: `screen` 패키지 설치
+2. **스크립트 복사**: `nexus_multi.sh`를 대상 서버에 복사
+3. **자동 설정**: 환경 변수를 통한 자동 설정
+   - `AUTO_MODE=1`: 자동 모드 활성화
+   - `NODE_COUNT=1`: 노드 개수 설정
+   - `THREADS_PER_NODE`: 스레드 수 설정
+   - `NODE_ID`: 노드 ID 설정
+4. **스크립트 실행**: Nexus 마이닝 노드 설치 및 시작
+
+### 2. 모니터링 및 관리
+
+- **상태 확인**: `make status`로 모든 노드 상태 확인
+- **실시간 모니터링**: `make monitor`로 실시간 상태 모니터링
+- **재시작**: `make restart`로 노드 재시작
+- **시스템 체크**: `make check`로 CPU, 메모리, 디스크 사용률 확인
+
+## 📞 지원
+
+문제가 발생하거나 추가 기능이 필요한 경우 이슈를 등록해 주세요.
