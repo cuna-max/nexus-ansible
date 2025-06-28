@@ -1,0 +1,16 @@
+- name: Restart Nexus Mining Nodes
+  hosts: miners
+  become: yes
+  gather_facts: no
+
+  tasks:
+    - name: Restart Nexus nodes using script restart command
+      shell: |
+        /root/nexus_multi.sh restart
+      args:
+        executable: /bin/bash
+      register: restart_output
+
+    - name: Display restart output
+      debug:
+        var: restart_output.stdout_lines

@@ -87,7 +87,7 @@ server2 ansible_host=192.168.1.101 node_id=7096264 threads=1
 - `node_id`: Nexus 마이닝 노드 ID
 - `threads`: 각 노드에서 사용할 CPU 스레드 수
 
-## �� 사용법
+## 🔧 사용법
 
 ### Makefile 명령어 (권장)
 
@@ -127,10 +127,10 @@ make restart-single SERVER=server1
 
 ```bash
 # 모든 서버에 배포
-ansible-playbook -i inventory.ini nexus.yml
+ansible-playbook -i inventory.ini playbooks/nexus.yml
 
 # 특정 서버에만 배포
-ansible-playbook -i inventory.ini nexus.yml --limit server1
+ansible-playbook -i inventory.ini playbooks/nexus.yml --limit server1
 
 # 서버 연결 테스트
 ansible miners -i inventory.ini -m ping
@@ -148,7 +148,9 @@ nexus-ansible/
 │   └── miners.yml           # 실제 서버 접속 정보 (Git에서 제외)
 ├── inventory.ini.example     # 서버 목록 예시
 ├── inventory.ini            # 실제 서버 목록 (Git에서 제외)
-├── nexus.yml                # 메인 플레이북
+├── playbooks/               # Ansible 플레이북 모음
+│   ├── nexus.yml            # 메인 배포 플레이북
+│   └── restart.yml          # 재시작 플레이북
 ├── Makefile                 # 편의 명령어 모음
 ├── roles/
 │   └── nexus/              # Nexus 설치 역할

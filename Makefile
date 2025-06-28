@@ -6,6 +6,7 @@ INVENTORY = inventory.ini
 GROUP = miners
 NEXUS_SCRIPT = /root/nexus_multi.sh
 ERROR_MSG = Nexus script not found
+PLAYBOOKS_DIR = playbooks/
 
 # 기본 타겟
 .PHONY: help
@@ -15,6 +16,7 @@ help:
 	@echo "  make deploy        - Nexus 새로 배포 (스크립트 복사 + 실행)"
 	@echo "  make status        - Nexus 노드 상태 확인"
 	@echo "  make restart       - Nexus 노드 재시작 (기존 설정으로)"
+	@echo "  make restart-playbook - Nexus 노드 재시작 (Ansible 플레이북 사용)"
 	@echo "  make monitor       - 실시간 노드 모니터링"
 	@echo "  make update        - Nexus 업데이트"
 	@echo "  make check         - 시스템 상태 체크"
@@ -25,6 +27,7 @@ help:
 	@echo "  make deploy-single  - 특정 서버에 새로 배포"
 	@echo "  make status-single  - 특정 서버 노드 상태 확인"
 	@echo "  make restart-single - 특정 서버 노드 재시작"
+	@echo "  make restart-single-playbook - 특정 서버 노드 재시작 (Ansible 플레이북 사용)"
 
 # 서버 연결 상태 확인
 .PHONY: ping
@@ -36,7 +39,7 @@ ping:
 .PHONY: deploy
 deploy:
 	@echo "🚀 Nexus를 배포합니다..."
-	ansible-playbook -i $(INVENTORY) nexus.yml
+	ansible-playbook -i $(INVENTORY) $(PLAYBOOKS_DIR)nexus.yml
 
 # Nexus 노드 상태 확인
 .PHONY: status
@@ -48,7 +51,7 @@ status:
 .PHONY: restart
 restart:
 	@echo "🔄 Nexus 노드를 재시작합니다..."
-	ansible $(GROUP) -i $(INVENTORY) -m shell -a "bash $(NEXUS_SCRIPT) restart || echo '$(ERROR_MSG)'"
+	ansible-playbook -i $(INVENTORY) $(PLAYBOOKS_DIR)restart.yml
 
 # 실시간 노드 모니터링
 .PHONY: monitor
@@ -78,7 +81,7 @@ ping-single:
 .PHONY: deploy-single
 deploy-single:
 	@echo "🚀 $(SERVER) 서버에 Nexus를 배포합니다..."
-	ansible-playbook -i $(INVENTORY) nexus.yml --limit $(SERVER)
+	ansible-playbook -i $(INVENTORY) $(PLAYBOOKS_DIR)nexus.yml --limit $(SERVER)
 
 # 특정 서버의 Nexus 노드 상태 확인
 .PHONY: status-single
@@ -91,3 +94,9 @@ status-single:
 restart-single:
 	@echo "🔄 $(SERVER) 서버의 Nexus 노드를 재시작합니다..."
 	ansible $(SERVER) -i $(INVENTORY) -m shell -a "bash $(NEXUS_SCRIPT) restart || echo '$(ERROR_MSG)'"
+
+# 특정 서버의 Nexus 노드 재시작 (Ansible 플레이북 사용)
+.PHONY: restart-single-playbook
+restart-single-playbook:
+	@echo "🔄 Ansible 플레이북으로 $(SERVER) 서버의 Nexus 노드를 재시작합니다..."
+	ansible-playbook -i $(INVENTORY) $(PLAYBOOKS_DIR)restart.yml --limit $(SERVER)

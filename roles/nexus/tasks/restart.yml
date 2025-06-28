@@ -1,0 +1,27 @@
+- name: Check if nexus_multi.sh exists
+  stat:
+    path: /root/nexus_multi.sh
+  register: nexus_script
+
+- name: Fail if nexus script not found
+  fail:
+    msg: "Nexus script not found. Please run deploy first."
+  when: not nexus_script.stat.exists
+
+- name: Restart Nexus nodes
+  shell: |
+    export NODE_COUNT=1
+    export THREADS_PER_NODE={{ threads }}
+    export NODE_ID={{ node_id }}
+    /root/nexus_multi.sh restart
+  args:
+    executable: /bin/bash
+  register: restart_output
+
+- name: Debug restart output
+  debug:
+    var: restart_output.stdout_lines
+
+- name: Show restart status
+  debug:
+    msg: "Nexus nodes restart completed successfully"
