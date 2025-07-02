@@ -9,7 +9,7 @@
     url: https://cli.nexus.xyz/
     dest: /tmp/nexus-cli-installer.sh
     mode: "0755"
-    timeout: 60
+    timeout: 30
   when: nexus_cli_check.rc != 0
   register: installer_download
 
@@ -17,8 +17,9 @@
   shell: |
     set -e
     /tmp/nexus-cli-installer.sh
-    # 설치 후 PATH 업데이트 확인
-    export PATH="$HOME/.nexus:$PATH"
+    # 설치 후 PATH 업데이트 및 bashrc 소스
+    source ~/.bashrc
+    export PATH="$HOME/.nexus/bin:$PATH"
     nexus-cli --version
   args:
     executable: /bin/bash
@@ -28,7 +29,8 @@
 
 - name: Verify nexus-cli installation
   shell: |
-    export PATH="$HOME/.nexus:$PATH"
+    source ~/.bashrc
+    export PATH="$HOME/.nexus/bin:$PATH"
     which nexus-cli && nexus-cli --version
   register: nexus_cli_verify
   failed_when: false
@@ -93,7 +95,8 @@
 
 - name: Start Nexus CLI in background with node ID
   shell: |
-    export PATH="$HOME/.nexus:$PATH"
+    source ~/.bashrc
+    export PATH="$HOME/.nexus/bin:$PATH"
     nohup nexus-cli start --node-id {{ node_id }} > ~/.nexus/nexus.log 2>&1 &
     echo $! > ~/.nexus/nexus.pid
   args:
@@ -103,7 +106,8 @@
 
 - name: Start Nexus CLI in background without node ID
   shell: |
-    export PATH="$HOME/.nexus:$PATH"
+    source ~/.bashrc
+    export PATH="$HOME/.nexus/bin:$PATH"
     nohup nexus-cli start > ~/.nexus/nexus.log 2>&1 &
     echo $! > ~/.nexus/nexus.pid
   args:
@@ -113,11 +117,13 @@
 
 - name: Wait for Nexus CLI to start
   wait_for:
-    timeout: 30
+    timeout: 15
   when: nexus_output.changed
 
 - name: Show Nexus CLI status
   shell: |
+    source ~/.bashrc
+    export PATH="$HOME/.nexus/bin:$PATH"
     if [ -f ~/.nexus/nexus.pid ]; then
       PID=$(cat ~/.nexus/nexus.pid)
       if ps -p $PID > /dev/null; then

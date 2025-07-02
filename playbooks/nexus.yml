@@ -2,6 +2,15 @@
   hosts: miners
   become: yes
   gather_facts: no
+  # 병렬 처리 최적화
+  serial: "{{ ansible_forks | default(10) }}"
+  # 타임아웃 설정
+  timeout: 300
+
+  vars:
+    # 성능 최적화 변수
+    ansible_ssh_pipelining: yes
+    ansible_ssh_args: "-o ControlMaster=auto -o ControlPersist=60s -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no"
 
   roles:
     - ../roles/nexus

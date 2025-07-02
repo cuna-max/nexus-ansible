@@ -98,7 +98,7 @@ make help
 # 서버 연결 상태 확인
 make ping
 
-# Nexus 배포 (스크립트 복사 + 실행)
+# Nexus 배포 (병렬 처리 최적화)
 make deploy
 
 # Nexus 노드 상태 확인
@@ -115,6 +115,10 @@ make check
 
 # 정리 작업
 make cleanup
+
+# 고급 배포 옵션
+make deploy-fast   # 고속 배포 (20개 병렬 처리)
+make deploy-batch  # 배치 배포 (5개씩 그룹 처리)
 
 # 특정 서버에만 실행 (예: make ping-single SERVER=server1)
 make ping-single SERVER=server1
@@ -189,6 +193,46 @@ server1 ansible_host=203.0.113.10 node_id=1234567 threads=1
 server2 ansible_host=203.0.113.11 node_id=1234568 threads=2
 server3 ansible_host=203.0.113.12 node_id=1234569 threads=4
 ```
+
+## ⚡ 성능 최적화
+
+### 병렬 처리 설정
+
+이 프로젝트는 대규모 서버 배포를 위해 다음과 같은 성능 최적화가 적용되어 있습니다:
+
+#### 기본 최적화
+
+- **병렬 처리**: 기본 10개 서버 동시 처리
+- **SSH 최적화**: ControlMaster와 pipelining 활성화
+- **타임아웃 최적화**: 불필요한 대기 시간 단축
+- **Fact 캐싱**: 시스템 정보 캐싱으로 속도 향상
+
+#### 배포 옵션별 성능
+
+```bash
+# 기본 배포 (10개 병렬)
+make deploy
+
+# 고속 배포 (20개 병렬) - 대규모 서버용
+make deploy-fast
+
+# 배치 배포 (5개씩 그룹) - 안정성 중시
+make deploy-batch
+```
+
+#### 성능 비교
+
+- **기존 방식**: 서버 1개씩 순차 처리
+- **최적화 후**: 서버 10-20개 동시 처리
+- **예상 속도 향상**: 5-10배 빠른 배포
+
+### 시스템 요구사항
+
+고성능 배포를 위한 권장 사항:
+
+- **Ansible 컨트롤 노드**: 최소 4GB RAM, 4코어 CPU
+- **네트워크**: 안정적인 인터넷 연결
+- **대상 서버**: SSH 연결 지연 시간 < 100ms
 
 ## 🔧 작업 흐름
 
