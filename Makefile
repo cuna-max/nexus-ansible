@@ -53,7 +53,7 @@ status:
 .PHONY: monitor
 monitor:
 	@echo "📈 실시간 Nexus 노드 모니터링을 시작합니다..."
-	ansible $(GROUP) -i $(INVENTORY) -m shell -a "tail -f ~/.nexus/nexus.log"
+	ansible $(GROUP) -i $(INVENTORY) -m shell -a "if systemctl is-active --quiet nexus-mining; then journalctl -u nexus-mining -f; elif screen -list | grep -q nexus-cli; then screen -r nexus-cli; else echo 'Nexus CLI가 실행 중이지 않습니다.'; fi"
 
 # 시스템 상태 체크
 .PHONY: check
