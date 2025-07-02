@@ -61,7 +61,6 @@
       }
     dest: "~/.nexus/config.json"
     mode: "0644"
-  when: node_id is defined
 
 - name: Create systemd service file
   copy:
@@ -83,7 +82,7 @@
       WantedBy=multi-user.target
     dest: /etc/systemd/system/nexus-mining.service
     mode: "0644"
-  when: node_id is defined and use_systemd | default(false)
+  when: use_systemd | default(false)
 
 - name: Reload systemd and enable service
   systemd:
@@ -91,29 +90,31 @@
     name: nexus-mining
     enabled: yes
     state: started
-  when: node_id is defined and use_systemd | default(false)
+  when: use_systemd | default(false)
 
-- name: Start Nexus CLI in background with node ID
+- name: Check if screen is installed
+  command: which screen
+  register: screen_check
+  failed_when: false
+  changed_when: false
+
+- name: Install screen if not present
+  package:
+    name: screen
+    state: present
+  when: screen_check.rc != 0
+
+- name: Start Nexus CLI in screen session
   shell: |
     source ~/.bashrc
     export PATH="$HOME/.nexus/bin:$PATH"
-    nohup nexus-cli start --node-id {{ node_id }} > ~/.nexus/nexus.log 2>&1 &
-    echo $! > ~/.nexus/nexus.pid
+    screen -dmS nexus-cli bash -c 'nexus-cli start --node-id {{ node_id }} > ~/.nexus/nexus.log 2>&1'
+    sleep 2
+    screen -list | grep nexus-cli
   args:
     executable: /bin/bash
   register: nexus_output
-  when: node_id is defined and not (use_systemd | default(false))
-
-- name: Start Nexus CLI in background without node ID
-  shell: |
-    source ~/.bashrc
-    export PATH="$HOME/.nexus/bin:$PATH"
-    nohup nexus-cli start > ~/.nexus/nexus.log 2>&1 &
-    echo $! > ~/.nexus/nexus.pid
-  args:
-    executable: /bin/bash
-  register: nexus_output
-  when: node_id is not defined and not (use_systemd | default(false))
+  when: not (use_systemd | default(false))
 
 - name: Wait for Nexus CLI to start
   wait_for:
@@ -124,19 +125,16 @@
   shell: |
     source ~/.bashrc
     export PATH="$HOME/.nexus/bin:$PATH"
-    if [ -f ~/.nexus/nexus.pid ]; then
-      PID=$(cat ~/.nexus/nexus.pid)
-      if ps -p $PID > /dev/null; then
-        echo "Nexus CLI is running with PID: $PID"
-        tail -n 10 ~/.nexus/nexus.log
-      else
-        echo "Nexus CLI process not found"
-      fi
-    elif systemctl is-active --quiet nexus-mining; then
+    if systemctl is-active --quiet nexus-mining; then
       echo "Nexus CLI is running as systemd service"
       systemctl status nexus-mining --no-pager -l
+    elif screen -list | grep -q nexus-cli; then
+      echo "Nexus CLI is running in screen session"
+      screen -list | grep nexus-cli
+      echo "=== Recent logs ==="
+      tail -n 10 ~/.nexus/nexus.log
     else
-      echo "Nexus CLI status unknown"
+      echo "Nexus CLI is not running"
     fi
   register: nexus_status
 
