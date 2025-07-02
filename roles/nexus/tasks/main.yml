@@ -1,26 +1,139 @@
-- name: Install dependencies
-  apt:
-    name: screen
-    state: present
-    update_cache: yes
+- name: Check if nexus-cli is installed
+  command: which nexus-cli
+  register: nexus_cli_check
+  failed_when: false
+  changed_when: false
 
-- name: Copy nexus_multi.sh file
-  copy:
-    src: nexus_multi.sh
-    dest: /root/nexus_multi.sh
+- name: Download nexus-cli installer
+  get_url:
+    url: https://cli.nexus.xyz/
+    dest: /tmp/nexus-cli-installer.sh
+    mode: "0755"
+    timeout: 60
+  when: nexus_cli_check.rc != 0
+  register: installer_download
+
+- name: Install nexus-cli if not present
+  shell: |
+    set -e
+    /tmp/nexus-cli-installer.sh
+    # 설치 후 PATH 업데이트 확인
+    export PATH="$HOME/.nexus:$PATH"
+    nexus-cli --version
+  args:
+    executable: /bin/bash
+  when: nexus_cli_check.rc != 0
+  register: nexus_cli_install
+  failed_when: nexus_cli_install.rc != 0
+
+- name: Verify nexus-cli installation
+  shell: |
+    export PATH="$HOME/.nexus:$PATH"
+    which nexus-cli && nexus-cli --version
+  register: nexus_cli_verify
+  failed_when: false
+  when: nexus_cli_check.rc != 0
+
+- name: Fail if nexus-cli installation failed
+  fail:
+    msg: "nexus-cli 설치에 실패했습니다. 설치 스크립트를 확인해주세요. 오류: {{ nexus_cli_install.stderr | default('알 수 없는 오류') }}"
+  when: nexus_cli_check.rc != 0 and nexus_cli_verify.rc != 0
+
+- name: Clean up installer
+  file:
+    path: /tmp/nexus-cli-installer.sh
+    state: absent
+  when: nexus_cli_check.rc != 0
+
+- name: Create Nexus config directory
+  file:
+    path: "~/.nexus"
+    state: directory
     mode: "0755"
 
-- name: Run Nexus script with automated setup
+- name: Create Nexus config file
+  copy:
+    content: |
+      {
+        "node_id": "{{ node_id }}"
+      }
+    dest: "~/.nexus/config.json"
+    mode: "0644"
+  when: node_id is defined
+
+- name: Create systemd service file
+  copy:
+    content: |
+      [Unit]
+      Description=Nexus CLI Mining Service
+      After=network.target
+
+      [Service]
+      Type=simple
+      User={{ ansible_user | default('root') }}
+      WorkingDirectory=/home/{{ ansible_user | default('root') }}
+      Environment=PATH=/home/{{ ansible_user | default('root') }}/.nexus:$PATH
+      ExecStart=/home/{{ ansible_user | default('root') }}/.nexus/nexus-cli start --node-id {{ node_id }}
+      Restart=always
+      RestartSec=10
+
+      [Install]
+      WantedBy=multi-user.target
+    dest: /etc/systemd/system/nexus-mining.service
+    mode: "0644"
+  when: node_id is defined and use_systemd | default(false)
+
+- name: Reload systemd and enable service
+  systemd:
+    daemon_reload: yes
+    name: nexus-mining
+    enabled: yes
+    state: started
+  when: node_id is defined and use_systemd | default(false)
+
+- name: Start Nexus CLI in background with node ID
   shell: |
-    export AUTO_MODE=1
-    export NODE_COUNT=1
-    export THREADS_PER_NODE={{ threads }}
-    export NODE_ID={{ node_id }}
-    /root/nexus_multi.sh
+    export PATH="$HOME/.nexus:$PATH"
+    nohup nexus-cli start --node-id {{ node_id }} > ~/.nexus/nexus.log 2>&1 &
+    echo $! > ~/.nexus/nexus.pid
   args:
     executable: /bin/bash
   register: nexus_output
+  when: node_id is defined and not (use_systemd | default(false))
 
-- name: Debug output
+- name: Start Nexus CLI in background without node ID
+  shell: |
+    export PATH="$HOME/.nexus:$PATH"
+    nohup nexus-cli start > ~/.nexus/nexus.log 2>&1 &
+    echo $! > ~/.nexus/nexus.pid
+  args:
+    executable: /bin/bash
+  register: nexus_output
+  when: node_id is not defined and not (use_systemd | default(false))
+
+- name: Wait for Nexus CLI to start
+  wait_for:
+    timeout: 30
+  when: nexus_output.changed
+
+- name: Show Nexus CLI status
+  shell: |
+    if [ -f ~/.nexus/nexus.pid ]; then
+      PID=$(cat ~/.nexus/nexus.pid)
+      if ps -p $PID > /dev/null; then
+        echo "Nexus CLI is running with PID: $PID"
+        tail -n 10 ~/.nexus/nexus.log
+      else
+        echo "Nexus CLI process not found"
+      fi
+    elif systemctl is-active --quiet nexus-mining; then
+      echo "Nexus CLI is running as systemd service"
+      systemctl status nexus-mining --no-pager -l
+    else
+      echo "Nexus CLI status unknown"
+    fi
+  register: nexus_status
+
+- name: Display Nexus status
   debug:
-    var: nexus_output.stdout_lines
+    var: nexus_status.stdout_lines

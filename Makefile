@@ -45,19 +45,13 @@ deploy:
 .PHONY: status
 status:
 	@echo "📊 Nexus 노드 상태를 확인합니다..."
-	ansible $(GROUP) -i $(INVENTORY) -m shell -a "bash $(NEXUS_SCRIPT) status || echo '$(ERROR_MSG)'"
-
-# Nexus 노드 재시작
-.PHONY: restart
-restart:
-	@echo "🔄 Nexus 노드를 재시작합니다..."
-	ansible-playbook -i $(INVENTORY) $(PLAYBOOKS_DIR)restart.yml
+	ansible $(GROUP) -i $(INVENTORY) -m shell -a "if [ -f ~/.nexus/nexus.pid ]; then PID=\$(cat ~/.nexus/nexus.pid); if ps -p \$PID > /dev/null; then echo \"Nexus CLI is running with PID: \$PID\"; tail -n 5 ~/.nexus/nexus.log; else echo \"Nexus CLI process not found\"; fi; elif systemctl is-active --quiet nexus-mining; then echo \"Nexus CLI is running as systemd service\"; systemctl status nexus-mining --no-pager -l; else echo \"Nexus CLI status unknown\"; fi"
 
 # 실시간 노드 모니터링
 .PHONY: monitor
 monitor:
 	@echo "📈 실시간 Nexus 노드 모니터링을 시작합니다..."
-	ansible $(GROUP) -i $(INVENTORY) -m shell -a "bash $(NEXUS_SCRIPT) monitor || echo '$(ERROR_MSG)'"
+	ansible $(GROUP) -i $(INVENTORY) -m shell -a "tail -f ~/.nexus/nexus.log"
 
 # 시스템 상태 체크
 .PHONY: check
@@ -69,7 +63,7 @@ check:
 .PHONY: cleanup
 cleanup:
 	@echo "🧹 정리 작업을 수행합니다..."
-	ansible $(GROUP) -i $(INVENTORY) -m shell -a "apt autoremove -y && apt autoclean"
+	ansible $(GROUP) -i $(INVENTORY) -m shell -a "apt autoremove -y && apt autoclean && killall screen && pkill -f "ssh.*@""
 
 # 특정 서버에만 실행 (예: make ping-single SERVER=contabo1)
 .PHONY: ping-single
@@ -87,13 +81,7 @@ deploy-single:
 .PHONY: status-single
 status-single:
 	@echo "📊 $(SERVER) 서버의 Nexus 노드 상태를 확인합니다..."
-	ansible $(SERVER) -i $(INVENTORY) -m shell -a "bash $(NEXUS_SCRIPT) status || echo '$(ERROR_MSG)'"
-
-# 특정 서버의 Nexus 노드 재시작
-.PHONY: restart-single
-restart-single:
-	@echo "🔄 $(SERVER) 서버의 Nexus 노드를 재시작합니다..."
-	ansible $(SERVER) -i $(INVENTORY) -m shell -a "bash $(NEXUS_SCRIPT) restart || echo '$(ERROR_MSG)'"
+	ansible $(SERVER) -i $(INVENTORY) -m shell -a "if [ -f ~/.nexus/nexus.pid ]; then PID=\$(cat ~/.nexus/nexus.pid); if ps -p \$PID > /dev/null; then echo \"Nexus CLI is running with PID: \$PID\"; tail -n 5 ~/.nexus/nexus.log; else echo \"Nexus CLI process not found\"; fi; elif systemctl is-active --quiet nexus-mining; then echo \"Nexus CLI is running as systemd service\"; systemctl status nexus-mining --no-pager -l; else echo \"Nexus CLI status unknown\"; fi"
 
 # 특정 서버의 Nexus 노드 재시작 (Ansible 플레이북 사용)
 .PHONY: restart-single-playbook
